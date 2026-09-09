@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -37,7 +38,14 @@ func CheckAdvancedTradePermissions(ctx context.Context, client *http.Client, cre
 		return nil, fmt.Errorf("read Coinbase response: %w", err)
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Coinbase key permissions: unexpected status %s", response.Status)
+		message := strings.TrimSpace(string(body))
+		if len(message) > 4096 {
+			message = message[:4096] + "…"
+		}
+		if message == "" {
+			return nil, fmt.Errorf("Coinbase key permissions: unexpected status %s", response.Status)
+		}
+		return nil, fmt.Errorf("Coinbase key permissions: unexpected status %s: %s", response.Status, message)
 	}
 	return body, nil
 }
