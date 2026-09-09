@@ -85,7 +85,7 @@ func BuildRESTJWT(credentials Credentials, method, requestHost, requestPath stri
 		URI     string `json:"uri"`
 		*jwt.Claims
 	}{
-		Issuer:  "coinbase-cloud",
+		Issuer:  "cdp",
 		Subject: credentials.KeyID,
 		URI:     fmt.Sprintf("%s %s%s", strings.ToUpper(method), requestHost, requestPath),
 		Claims: &jwt.Claims{
