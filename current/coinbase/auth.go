@@ -29,7 +29,7 @@ type Credentials struct {
 func CredentialsFromEnv() (Credentials, error) {
 	credentials := Credentials{
 		KeyID:     os.Getenv("COINBASE_KEY_ID"),
-		KeySecret: os.Getenv("COINBASE_KEY_SECRET"),
+		KeySecret: strings.ReplaceAll(os.Getenv("COINBASE_KEY_SECRET"), `\n`, "\n"),
 	}
 	if err := credentials.Validate(); err != nil {
 		return Credentials{}, err
