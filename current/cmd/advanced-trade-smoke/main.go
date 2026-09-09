@@ -16,6 +16,7 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
+	resource := flag.String("resource", "permissions", "read-only resource: permissions or accounts")
 	flag.Parse()
 
 	var credentials coinbase.Credentials
@@ -35,9 +36,17 @@ func main() {
 		log.Fatalf("load Coinbase credentials: %v", err)
 	}
 
-	permissions, err := coinbase.CheckAdvancedTradePermissions(context.Background(), nil, credentials)
-	if err != nil {
-		log.Fatalf("validate Coinbase API key: %v", err)
+	var response []byte
+	switch *resource {
+	case "permissions":
+		response, err = coinbase.CheckAdvancedTradePermissions(context.Background(), nil, credentials)
+	case "accounts":
+		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), nil, credentials)
+	default:
+		log.Fatalf("unsupported resource %q; use permissions or accounts", *resource)
 	}
-	fmt.Println(string(permissions))
+	if err != nil {
+		log.Fatalf("read Coinbase Advanced Trade data: %v", err)
+	}
+	fmt.Println(string(response))
 }

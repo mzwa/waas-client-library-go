@@ -15,9 +15,9 @@ operations.
 | `coinbase/server-wallet/live` | `key_id`, `key_secret`, `wallet_secret` | Backend-only server-wallet operations. |
 | `coinbase/embedded-wallet/live` | Server-side configuration only | Backend support for embedded wallets. Never expose a secret through a browser or mobile app. |
 
-The sample reads only the Advanced Trade path and calls
-`GET /api/v3/brokerage/key_permissions`. It cannot place, cancel, or transfer
-an order.
+The sample reads only the Advanced Trade path and can call either
+`GET /api/v3/brokerage/key_permissions` or `GET /api/v3/brokerage/accounts`.
+It cannot place, cancel, or transfer an order.
 
 Example least-privilege Vault policies are in `vault-policies/`. Apply only
 `advanced-trade-read.hcl` to the process that runs the smoke test; the
@@ -46,6 +46,9 @@ key_secret = -----BEGIN EC PRIVATE KEY----- ...
 Use a key restricted to the intended Coinbase portfolio and server IP address.
 For this read-only probe, grant only `view`. The program prints the API's
 permission response but never prints a secret or JWT.
+
+To list accessible accounts with the same view-only key, add
+`-resource=accounts` to the command.
 
 ## Next stages
 
