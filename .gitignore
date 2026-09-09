@@ -3,3 +3,14 @@
 .idea/*
 
 waas-client-library-go
+
+# Coinbase and HashiCorp Vault credentials must never be committed.
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+.sops/age/keys.txt
+secrets/*.env
+!secrets/*.enc.env
+advanced-trade.env

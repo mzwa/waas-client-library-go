@@ -1,0 +1,5 @@
+# Copy this file to .sops.yaml after obtaining the server's public age recipient.
+# The recipient is public; never add an age private identity to this repository.
+creation_rules:
+  - path_regex: ^secrets/coinbase/.*\.enc\.env$
+    age: age1replace_with_the_server_public_recipient

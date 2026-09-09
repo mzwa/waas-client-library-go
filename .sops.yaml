@@ -1,0 +1,5 @@
+# The private age identity lives only on the deployment server at
+# /etc/sops/age/keys.txt. This public recipient encrypts files for that server.
+creation_rules:
+  - path_regex: ^secrets/coinbase/.*\.enc\.env$
+    age: age18kc7njek0sva2wdcrcja92tvdw47qf5u96vrpwcfsxrn7gw00gms7jvt6z
