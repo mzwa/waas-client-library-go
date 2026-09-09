@@ -27,9 +27,12 @@ type Credentials struct {
 // CredentialsFromEnv loads Coinbase credentials injected into the process
 // environment by a secret manager such as SOPS or systemd credentials.
 func CredentialsFromEnv() (Credentials, error) {
+	keySecret := strings.TrimSpace(os.Getenv("COINBASE_KEY_SECRET"))
+	keySecret = strings.Trim(keySecret, `"'`)
+	keySecret = strings.ReplaceAll(keySecret, `\n`, "\n")
 	credentials := Credentials{
 		KeyID:     os.Getenv("COINBASE_KEY_ID"),
-		KeySecret: strings.ReplaceAll(os.Getenv("COINBASE_KEY_SECRET"), `\n`, "\n"),
+		KeySecret: keySecret,
 	}
 	if err := credentials.Validate(); err != nil {
 		return Credentials{}, err

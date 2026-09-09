@@ -4,7 +4,7 @@ import "testing"
 
 func TestCredentialsFromEnv(t *testing.T) {
 	t.Setenv("COINBASE_KEY_ID", "organizations/test/apiKeys/test")
-	t.Setenv("COINBASE_KEY_SECRET", "first-line\\nsecond-line")
+	t.Setenv("COINBASE_KEY_SECRET", `"first-line\nsecond-line"`)
 
 	credentials, err := CredentialsFromEnv()
 	if err != nil {
