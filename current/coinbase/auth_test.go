@@ -45,7 +45,7 @@ func TestBuildRESTJWTBindsTokenToRequest(t *testing.T) {
 	if err := parsed.UnsafeClaimsWithoutVerification(&claims); err != nil {
 		t.Fatalf("UnsafeClaimsWithoutVerification() error = %v", err)
 	}
-	if claims.Issuer != "cdp" || claims.Subject != credentials.KeyID {
+	if claims.Issuer != "coinbase-cloud" || claims.Subject != credentials.KeyID {
 		t.Fatalf("wrong principal claims: %#v", claims)
 	}
 	if claims.URI != "GET api.coinbase.com/api/v3/brokerage/key_permissions" {
