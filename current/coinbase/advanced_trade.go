@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -29,7 +30,19 @@ func ListAdvancedTradeAccounts(ctx context.Context, client *http.Client, credent
 // ListPublicProducts retrieves public Advanced Trade product metadata. It does
 // not require credentials and cannot access account data or place orders.
 func ListPublicProducts(ctx context.Context, client *http.Client) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+advancedTradeHost+publicProductsPath, nil)
+	return getPublicAdvancedTrade(ctx, client, publicProductsPath)
+}
+
+// GetPublicProduct retrieves metadata for one public market, such as BTC-USD.
+func GetPublicProduct(ctx context.Context, client *http.Client, productID string) ([]byte, error) {
+	if strings.TrimSpace(productID) == "" {
+		return nil, fmt.Errorf("Coinbase product ID is required")
+	}
+	return getPublicAdvancedTrade(ctx, client, publicProductsPath+"/"+url.PathEscape(productID))
+}
+
+func getPublicAdvancedTrade(ctx context.Context, client *http.Client, path string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+advancedTradeHost+path, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create Coinbase public products request: %w", err)
 	}
@@ -47,7 +60,7 @@ func ListPublicProducts(ctx context.Context, client *http.Client) ([]byte, error
 		return nil, fmt.Errorf("read Coinbase public products response: %w", err)
 	}
 	if response.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Coinbase public products: unexpected status %s", response.Status)
+		return nil, fmt.Errorf("Coinbase public GET %s: unexpected status %s", path, response.Status)
 	}
 	return body, nil
 }

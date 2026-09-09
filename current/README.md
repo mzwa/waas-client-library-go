@@ -53,6 +53,9 @@ To list accessible accounts with the same view-only key, add
 Public product metadata can be read without credentials with
 `-resource=public-products`.
 
+For one market instead of the full catalogue, use
+`-resource=public-product -product-id=BTC-USD`.
+
 ## Next stages
 
 1. Add an approval-gated order service using a different `trade` key.

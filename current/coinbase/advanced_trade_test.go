@@ -79,3 +79,16 @@ func TestListPublicProductsDoesNotSendAuthorization(t *testing.T) {
 		t.Fatalf("ListPublicProducts() = %s", response)
 	}
 }
+
+func TestGetPublicProductUsesProductPath(t *testing.T) {
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.URL.String() != "https://api.coinbase.com"+publicProductsPath+"/BTC-USD" {
+			t.Fatalf("unexpected URL: %s", request.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"product_id":"BTC-USD"}`)), Header: make(http.Header)}, nil
+	})}
+	response, err := GetPublicProduct(context.Background(), client, "BTC-USD")
+	if err != nil || string(response) != `{"product_id":"BTC-USD"}` {
+		t.Fatalf("GetPublicProduct() = %s, %v", response, err)
+	}
+}

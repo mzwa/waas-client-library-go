@@ -16,12 +16,21 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "read-only resource: permissions, accounts, or public-products")
+	resource := flag.String("resource", "permissions", "read-only resource: permissions, accounts, public-products, or public-product")
+	productID := flag.String("product-id", "BTC-USD", "public product ID used with -resource=public-product")
 	flag.Parse()
 	if *resource == "public-products" {
 		response, err := coinbase.ListPublicProducts(context.Background(), nil)
 		if err != nil {
 			log.Fatalf("read Coinbase public products: %v", err)
+		}
+		fmt.Println(string(response))
+		return
+	}
+	if *resource == "public-product" {
+		response, err := coinbase.GetPublicProduct(context.Background(), nil, *productID)
+		if err != nil {
+			log.Fatalf("read Coinbase public product: %v", err)
 		}
 		fmt.Println(string(response))
 		return
@@ -51,7 +60,7 @@ func main() {
 	case "accounts":
 		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), nil, credentials)
 	default:
-		log.Fatalf("unsupported resource %q; use permissions, accounts, or public-products", *resource)
+		log.Fatalf("unsupported resource %q", *resource)
 	}
 	if err != nil {
 		log.Fatalf("read Coinbase Advanced Trade data: %v", err)
