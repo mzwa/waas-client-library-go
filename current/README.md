@@ -50,6 +50,9 @@ permission response but never prints a secret or JWT.
 To list accessible accounts with the same view-only key, add
 `-resource=accounts` to the command.
 
+Public product metadata can be read without credentials with
+`-resource=public-products`.
+
 ## Next stages
 
 1. Add an approval-gated order service using a different `trade` key.

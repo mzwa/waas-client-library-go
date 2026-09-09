@@ -59,3 +59,23 @@ func TestListAdvancedTradeAccountsUsesAuthenticatedReadOnlyRequest(t *testing.T)
 		t.Fatalf("ListAdvancedTradeAccounts() = %s", response)
 	}
 }
+
+func TestListPublicProductsDoesNotSendAuthorization(t *testing.T) {
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.String() != "https://api.coinbase.com"+publicProductsPath {
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL)
+		}
+		if request.Header.Get("Authorization") != "" {
+			t.Fatal("public products request unexpectedly sent Authorization")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"products":[]}`)), Header: make(http.Header)}, nil
+	})}
+
+	response, err := ListPublicProducts(context.Background(), client)
+	if err != nil {
+		t.Fatalf("ListPublicProducts() error = %v", err)
+	}
+	if string(response) != `{"products":[]}` {
+		t.Fatalf("ListPublicProducts() = %s", response)
+	}
+}

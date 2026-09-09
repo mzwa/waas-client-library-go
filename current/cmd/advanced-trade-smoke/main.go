@@ -16,8 +16,16 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "read-only resource: permissions or accounts")
+	resource := flag.String("resource", "permissions", "read-only resource: permissions, accounts, or public-products")
 	flag.Parse()
+	if *resource == "public-products" {
+		response, err := coinbase.ListPublicProducts(context.Background(), nil)
+		if err != nil {
+			log.Fatalf("read Coinbase public products: %v", err)
+		}
+		fmt.Println(string(response))
+		return
+	}
 
 	var credentials coinbase.Credentials
 	var err error
@@ -43,7 +51,7 @@ func main() {
 	case "accounts":
 		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), nil, credentials)
 	default:
-		log.Fatalf("unsupported resource %q; use permissions or accounts", *resource)
+		log.Fatalf("unsupported resource %q; use permissions, accounts, or public-products", *resource)
 	}
 	if err != nil {
 		log.Fatalf("read Coinbase Advanced Trade data: %v", err)
