@@ -23,6 +23,7 @@ func CheckAdvancedTradePermissions(ctx context.Context, client *http.Client, cre
 	if err != nil {
 		return nil, fmt.Errorf("create Coinbase request: %w", err)
 	}
+	req.Header.Set("Accept", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	if client == nil {
