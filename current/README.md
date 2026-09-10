@@ -56,9 +56,33 @@ Public product metadata can be read without credentials with
 For one market instead of the full catalogue, use
 `-resource=public-product -product-id=BTC-USD`.
 
+## Preview a prospective market order
+
+Order previews are the only order-related operation currently implemented.
+They use `POST /api/v3/brokerage/orders/preview`, which Coinbase documents as a
+`view`-permission endpoint. A preview can report validation errors, expected
+fees, and a `preview_id`; it cannot submit an order.
+
+Use exactly one of `-quote-size` or `-base-size`:
+
+```bash
+go run ./current/cmd/advanced-trade-smoke \
+  -source=env \
+  -resource=preview-order \
+  -product-id=BTC-USD \
+  -side=BUY \
+  -quote-size=10.00
+```
+
+The package contains `RequireLiveOrderApproval`, which binds a future operator
+approval phrase to an exact product, side, and size. There is deliberately no
+live-order submission method in this starter: adding one requires a separate
+review and must call that guard immediately before the Coinbase request.
+
 ## Next stages
 
-1. Add an approval-gated order service using a different `trade` key.
+1. Review and add a live order service using the `trade` key, guarded by
+   `RequireLiveOrderApproval` immediately before submission.
 2. Add CDP Server Wallet support using the separate `wallet_secret`.
 3. Add the Embedded Wallet OAuth/custom-auth service without exposing backend
    secrets to clients.
