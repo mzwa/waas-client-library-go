@@ -7,7 +7,9 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/coinbase/waas-client-library-go/current/coinbase"
 )
@@ -22,8 +24,14 @@ func main() {
 	baseSize := flag.String("base-size", "", "base amount used with -resource=preview-order; set exactly one size")
 	quoteSize := flag.String("quote-size", "", "quote amount used with -resource=preview-order; set exactly one size")
 	flag.Parse()
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSHandshakeTimeout = 60 * time.Second
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   120 * time.Second,
+	}
 	if *resource == "public-products" {
-		response, err := coinbase.ListPublicProducts(context.Background(), nil)
+		response, err := coinbase.ListPublicProducts(context.Background(), client)
 		if err != nil {
 			log.Fatalf("read Coinbase public products: %v", err)
 		}
@@ -31,7 +39,7 @@ func main() {
 		return
 	}
 	if *resource == "public-product" {
-		response, err := coinbase.GetPublicProduct(context.Background(), nil, *productID)
+		response, err := coinbase.GetPublicProduct(context.Background(), client, *productID)
 		if err != nil {
 			log.Fatalf("read Coinbase public product: %v", err)
 		}
@@ -59,11 +67,11 @@ func main() {
 	var response []byte
 	switch *resource {
 	case "permissions":
-		response, err = coinbase.CheckAdvancedTradePermissions(context.Background(), nil, credentials)
+		response, err = coinbase.CheckAdvancedTradePermissions(context.Background(), client, credentials)
 	case "accounts":
-		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), nil, credentials)
+		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), client, credentials)
 	case "preview-order":
-		response, err = coinbase.PreviewOrder(context.Background(), nil, credentials, coinbase.MarketOrderPreview{
+		response, err = coinbase.PreviewOrder(context.Background(), client, credentials, coinbase.MarketOrderPreview{
 			ProductID: *productID,
 			Side:      *side,
 			BaseSize:  *baseSize,
