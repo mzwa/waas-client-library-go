@@ -74,10 +74,11 @@ go run ./current/cmd/advanced-trade-smoke \
   -quote-size=10.00
 ```
 
-The package contains `RequireLiveOrderApproval`, which binds a future operator
-approval phrase to an exact product, side, and size. There is deliberately no
-live-order submission method in this starter: adding one requires a separate
-review and must call that guard immediately before the Coinbase request.
+The package contains `RequireLiveOrderApprovalForPreview`, which binds a future
+operator approval phrase to the exact product, side, size, and Coinbase
+`preview_id`. There is deliberately no live-order submission method in this
+starter: adding one requires a separate review and must call that guard
+immediately before the Coinbase request.
 
 ## Next stages
 

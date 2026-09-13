@@ -150,6 +150,23 @@ func TestRequireLiveOrderApprovalBindsPhraseToExactIntent(t *testing.T) {
 	}
 }
 
+func TestRequireLiveOrderApprovalForPreviewBindsPhraseToPreviewAndIntent(t *testing.T) {
+	intent := MarketOrderPreview{ProductID: "BTC-USDC", Side: "BUY", QuoteSize: "1.00"}
+	phrase, err := intent.ApprovalPhraseForPreview("preview-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RequireLiveOrderApprovalForPreview(intent, "preview-123", phrase); err != nil {
+		t.Fatalf("RequireLiveOrderApprovalForPreview() error = %v", err)
+	}
+	if err := RequireLiveOrderApprovalForPreview(intent, "preview-456", phrase); err == nil {
+		t.Fatal("approval phrase unexpectedly approved a different preview")
+	}
+	if _, err := intent.ApprovalPhraseForPreview(""); err == nil {
+		t.Fatal("empty preview ID unexpectedly produced an approval phrase")
+	}
+}
+
 func testCredentials(t *testing.T) Credentials {
 	t.Helper()
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
