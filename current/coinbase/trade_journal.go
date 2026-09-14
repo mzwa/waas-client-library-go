@@ -41,21 +41,64 @@ type coinbaseOrderResponse struct {
 		FilledSize           string `json:"filled_size"`
 		AverageFilledPrice   string `json:"average_filled_price"`
 		TotalFees            string `json:"total_fees"`
+		FilledValue          string `json:"filled_value"`
+		TotalValueAfterFees  string `json:"total_value_after_fees"`
+		CreatedTime          string `json:"created_time"`
+		LastFillTime         string `json:"last_fill_time"`
+		Settled              bool   `json:"settled"`
 	} `json:"order"`
+}
+
+// OrderSummary is the safe terminal representation of a completed Coinbase
+// order. It intentionally excludes user, portfolio, and account identifiers.
+type OrderSummary struct {
+	OrderID              string `json:"order_id"`
+	PreviewID            string `json:"preview_id"`
+	ProductID            string `json:"product_id"`
+	Side                 string `json:"side"`
+	Status               string `json:"status"`
+	CompletionPercentage string `json:"completion_percentage"`
+	FilledSize           string `json:"filled_size"`
+	AverageFilledPrice   string `json:"average_filled_price"`
+	FilledValue          string `json:"filled_value"`
+	TotalFees            string `json:"total_fees"`
+	TotalValueAfterFees  string `json:"total_value_after_fees"`
+	CreatedTime          string `json:"created_time"`
+	LastFillTime         string `json:"last_fill_time"`
+	Settled              bool   `json:"settled"`
+}
+
+// SummarizeOrderStatus reduces Coinbase's response to non-sensitive execution
+// fields suitable for terminal output and application logs.
+func SummarizeOrderStatus(orderStatus []byte) (OrderSummary, error) {
+	response, err := decodeOrderStatus(orderStatus)
+	if err != nil {
+		return OrderSummary{}, err
+	}
+	return OrderSummary{
+		OrderID:              response.Order.OrderID,
+		PreviewID:            response.Order.ClientOrderID,
+		ProductID:            response.Order.ProductID,
+		Side:                 response.Order.Side,
+		Status:               response.Order.Status,
+		CompletionPercentage: response.Order.CompletionPercentage,
+		FilledSize:           response.Order.FilledSize,
+		AverageFilledPrice:   response.Order.AverageFilledPrice,
+		FilledValue:          response.Order.FilledValue,
+		TotalFees:            response.Order.TotalFees,
+		TotalValueAfterFees:  response.Order.TotalValueAfterFees,
+		CreatedTime:          response.Order.CreatedTime,
+		LastFillTime:         response.Order.LastFillTime,
+		Settled:              response.Order.Settled,
+	}, nil
 }
 
 // AppendOrderStatusToJournal extracts a minimal record from a read-only
 // Coinbase Get Order response and appends it to a 0600 JSONL journal.
 func AppendOrderStatusToJournal(path string, orderStatus []byte, recordedAt time.Time) (TradeJournalEntry, error) {
-	var response coinbaseOrderResponse
-	if err := json.Unmarshal(orderStatus, &response); err != nil {
-		return TradeJournalEntry{}, fmt.Errorf("decode Coinbase order status: %w", err)
-	}
-	if !isUUID(response.Order.OrderID) {
-		return TradeJournalEntry{}, fmt.Errorf("Coinbase order status did not contain a UUID order ID")
-	}
-	if response.Order.ProductID == "" || response.Order.Side == "" || response.Order.Status == "" {
-		return TradeJournalEntry{}, fmt.Errorf("Coinbase order status is missing required trade metadata")
+	response, err := decodeOrderStatus(orderStatus)
+	if err != nil {
+		return TradeJournalEntry{}, err
 	}
 	previousHash, _, err := VerifyTradeJournal(path)
 	if err != nil {
@@ -94,6 +137,20 @@ func AppendOrderStatusToJournal(path string, orderStatus []byte, recordedAt time
 		return TradeJournalEntry{}, fmt.Errorf("append trade journal: %w", err)
 	}
 	return entry, nil
+}
+
+func decodeOrderStatus(orderStatus []byte) (coinbaseOrderResponse, error) {
+	var response coinbaseOrderResponse
+	if err := json.Unmarshal(orderStatus, &response); err != nil {
+		return coinbaseOrderResponse{}, fmt.Errorf("decode Coinbase order status: %w", err)
+	}
+	if !isUUID(response.Order.OrderID) {
+		return coinbaseOrderResponse{}, fmt.Errorf("Coinbase order status did not contain a UUID order ID")
+	}
+	if response.Order.ProductID == "" || response.Order.Side == "" || response.Order.Status == "" {
+		return coinbaseOrderResponse{}, fmt.Errorf("Coinbase order status is missing required trade metadata")
+	}
+	return response, nil
 }
 
 // VerifyTradeJournal validates every hash-chain link and returns the last hash

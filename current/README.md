@@ -107,12 +107,13 @@ go run ./current/cmd/advanced-trade-smoke -source=env -resource=live-order \
 
 ## Reconcile and journal a completed order
 
-`order-status` is a read-only Coinbase lookup. `journal-order-status` first
-performs that same read-only lookup, then appends selected trade metadata to a
-local JSONL journal with 0600 permissions. Each journal entry includes the
-previous entry hash, so `verify-journal` detects alteration or removal. It is
-tamper-evident rather than physically immutable; keep its directory restricted
-to the trading service account.
+`order-status` is a read-only Coinbase lookup and prints only a sanitized
+execution summary; it excludes account, user, and portfolio identifiers.
+`journal-order-status` first performs that same read-only lookup, then appends
+selected trade metadata to a local JSONL journal with 0600 permissions. Each
+journal entry includes the previous entry hash, so `verify-journal` detects
+alteration or removal. It is tamper-evident rather than physically immutable;
+keep its directory restricted to the trading service account.
 
 ```bash
 # Read Coinbase's final order record. This makes no account changes.

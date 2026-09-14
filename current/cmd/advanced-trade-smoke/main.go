@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -106,6 +107,16 @@ func main() {
 		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), client, credentials)
 	case "order-status":
 		response, err = coinbase.GetAdvancedTradeOrder(context.Background(), client, credentials, *orderID)
+		if err == nil {
+			summary, summaryErr := coinbase.SummarizeOrderStatus(response)
+			if summaryErr != nil {
+				log.Fatalf("summarize Coinbase order status: %v", summaryErr)
+			}
+			response, summaryErr = json.Marshal(summary)
+			if summaryErr != nil {
+				log.Fatalf("encode Coinbase order summary: %v", summaryErr)
+			}
+		}
 	case "journal-order-status":
 		if *journalPath == "" {
 			log.Fatal("record trade journal: -journal-path is required")
@@ -117,6 +128,14 @@ func main() {
 				log.Fatalf("record trade journal: %v", journalErr)
 			}
 			fmt.Printf("journaled order %s with hash %s\n", entry.OrderID, entry.Hash)
+			summary, summaryErr := coinbase.SummarizeOrderStatus(response)
+			if summaryErr != nil {
+				log.Fatalf("summarize Coinbase order status: %v", summaryErr)
+			}
+			response, summaryErr = json.Marshal(summary)
+			if summaryErr != nil {
+				log.Fatalf("encode Coinbase order summary: %v", summaryErr)
+			}
 		}
 	case "preview-order":
 		response, err = coinbase.PreviewOrder(context.Background(), client, credentials, intent)
