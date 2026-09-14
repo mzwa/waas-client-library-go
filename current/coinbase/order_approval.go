@@ -38,8 +38,8 @@ func (p MarketOrderPreview) ApprovalPhraseForPreview(previewID string) (string, 
 		return "", err
 	}
 	previewID = strings.TrimSpace(previewID)
-	if previewID == "" {
-		return "", fmt.Errorf("Coinbase preview ID is required for live order approval")
+	if !isUUID(previewID) {
+		return "", fmt.Errorf("a UUID Coinbase preview ID is required for live order approval")
 	}
 	canonical := strings.Join([]string{
 		previewID,
@@ -50,6 +50,24 @@ func (p MarketOrderPreview) ApprovalPhraseForPreview(previewID string) (string, 
 	}, "\n")
 	digest := sha256.Sum256([]byte(canonical))
 	return "APPROVE-LIVE-ORDER:" + hex.EncodeToString(digest[:]), nil
+}
+
+func isUUID(value string) bool {
+	if len(value) != 36 {
+		return false
+	}
+	for index, character := range value {
+		if index == 8 || index == 13 || index == 18 || index == 23 {
+			if character != '-' {
+				return false
+			}
+			continue
+		}
+		if !(character >= '0' && character <= '9') && !(character >= 'a' && character <= 'f') && !(character >= 'A' && character <= 'F') {
+			return false
+		}
+	}
+	return true
 }
 
 // RequireLiveOrderApproval is the mandatory guard for any future live-order

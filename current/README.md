@@ -74,11 +74,36 @@ go run ./current/cmd/advanced-trade-smoke \
   -quote-size=10.00
 ```
 
-The package contains `RequireLiveOrderApprovalForPreview`, which binds a future
-operator approval phrase to the exact product, side, size, and Coinbase
-`preview_id`. There is deliberately no live-order submission method in this
-starter: adding one requires a separate review and must call that guard
-immediately before the Coinbase request.
+## Narrow live-order path
+
+The only live action implemented is a market **BUY** of `BTC-USDC` using a
+quote size of at most **1 USDC**. It cannot sell, transfer funds, cancel
+orders, use another market, or spend more than 1 USDC. A live request binds to
+the exact `preview_id`; that UUID is also used as Coinbase's `client_order_id`,
+so retrying the same preview is idempotent.
+
+The operator must first obtain a fresh preview, then generate its exact
+approval phrase. The final command requires both that phrase and a literal
+confirmation flag. Do not run the final command unless you intentionally want
+to submit that exact order:
+
+```bash
+# Produce a new preview and retain its preview_id from the JSON response.
+go run ./current/cmd/advanced-trade-smoke -source=env \
+  -resource=preview-order -product-id=BTC-USDC -side=BUY -quote-size=1.00
+
+# Generate the phrase for that exact preview ID; type or paste it into the
+# final command yourself. It is not a credential.
+go run ./current/cmd/advanced-trade-smoke -resource=approval-phrase \
+  -product-id=BTC-USDC -side=BUY -quote-size=1.00 \
+  -preview-id=<preview-id>
+
+# This is the only command that can place an order.
+go run ./current/cmd/advanced-trade-smoke -source=env -resource=live-order \
+  -product-id=BTC-USDC -side=BUY -quote-size=1.00 \
+  -preview-id=<preview-id> -approval-phrase=<approval-phrase> \
+  -confirm-live-order=SUBMIT-1-USDC-BTC-USDC-BUY
+```
 
 ## Next stages
 

@@ -18,6 +18,13 @@ const keyPermissionsPath = "/api/v3/brokerage/key_permissions"
 const accountsPath = "/api/v3/brokerage/accounts"
 const publicProductsPath = "/api/v3/brokerage/market/products"
 const previewOrderPath = "/api/v3/brokerage/orders/preview"
+const createOrderPath = "/api/v3/brokerage/orders"
+
+const (
+	liveOrderProductID            = "BTC-USDC"
+	liveOrderSide                 = "BUY"
+	liveOrderMaximumQuoteSizeUSDC = "1"
+)
 
 // MarketOrderPreview is a non-executable market-order request. Exactly one of
 // BaseSize and QuoteSize must be provided. It is accepted by PreviewOrder only;
@@ -36,6 +43,19 @@ type marketOrderPreviewPayload struct {
 		MarketMarketIOC struct {
 			BaseSize    string `json:"base_size,omitempty"`
 			QuoteSize   string `json:"quote_size,omitempty"`
+			RFQDisabled bool   `json:"rfq_disabled"`
+		} `json:"market_market_ioc"`
+	} `json:"order_configuration"`
+}
+
+type liveMarketOrderPayload struct {
+	ClientOrderID      string `json:"client_order_id"`
+	PreviewID          string `json:"preview_id"`
+	ProductID          string `json:"product_id"`
+	Side               string `json:"side"`
+	OrderConfiguration struct {
+		MarketMarketIOC struct {
+			QuoteSize   string `json:"quote_size"`
 			RFQDisabled bool   `json:"rfq_disabled"`
 		} `json:"market_market_ioc"`
 	} `json:"order_configuration"`
@@ -101,6 +121,50 @@ func PreviewOrder(ctx context.Context, client *http.Client, credentials Credenti
 		return nil, fmt.Errorf("encode Coinbase order preview: %w", err)
 	}
 	return postAdvancedTrade(ctx, client, credentials, previewOrderPath, body)
+}
+
+// CreateApprovedOneUSDCBTCBuy creates one narrowly-scoped market buy. It is
+// deliberately not a general-purpose order API: it can create only a BTC-USDC
+// BUY with a quote size no greater than 1 USDC. The Coinbase preview ID serves
+// as the client order ID, making retries for the same preview idempotent.
+//
+// The supplied approval phrase is verified immediately before the request is
+// sent. Callers must obtain a fresh preview ID because Coinbase may reject an
+// expired or changed preview.
+func CreateApprovedOneUSDCBTCBuy(ctx context.Context, client *http.Client, credentials Credentials, intent MarketOrderPreview, previewID, approvalPhrase string) ([]byte, error) {
+	if err := validateOneUSDCBTCBuy(intent); err != nil {
+		return nil, err
+	}
+	if err := RequireLiveOrderApprovalForPreview(intent, previewID, approvalPhrase); err != nil {
+		return nil, err
+	}
+	payload := liveMarketOrderPayload{
+		ClientOrderID: strings.TrimSpace(previewID),
+		PreviewID:     strings.TrimSpace(previewID),
+		ProductID:     liveOrderProductID,
+		Side:          liveOrderSide,
+	}
+	payload.OrderConfiguration.MarketMarketIOC.QuoteSize = strings.TrimSpace(intent.QuoteSize)
+	payload.OrderConfiguration.MarketMarketIOC.RFQDisabled = true
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("encode Coinbase live order: %w", err)
+	}
+	return postAdvancedTrade(ctx, client, credentials, createOrderPath, body)
+}
+
+func validateOneUSDCBTCBuy(intent MarketOrderPreview) error {
+	if err := intent.Validate(); err != nil {
+		return err
+	}
+	if intent.ProductID != liveOrderProductID || intent.Side != liveOrderSide || strings.TrimSpace(intent.BaseSize) != "" {
+		return fmt.Errorf("live order refused: only a %s %s market buy with quote size is allowed", liveOrderProductID, liveOrderSide)
+	}
+	quoteSize, ok := new(big.Rat).SetString(strings.TrimSpace(intent.QuoteSize))
+	if !ok || quoteSize.Cmp(big.NewRat(1, 1)) > 0 {
+		return fmt.Errorf("live order refused: quote size may not exceed %s USDC", liveOrderMaximumQuoteSizeUSDC)
+	}
+	return nil
 }
 
 // CheckAdvancedTradePermissions performs the least-privileged authenticated
@@ -208,12 +272,12 @@ func postAdvancedTrade(ctx context.Context, client *http.Client, credentials Cre
 	}
 	response, err := client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("call Coinbase order preview: %w", err)
+		return nil, fmt.Errorf("call Coinbase POST %s: %w", path, err)
 	}
 	defer response.Body.Close()
 	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
 	if err != nil {
-		return nil, fmt.Errorf("read Coinbase order preview response: %w", err)
+		return nil, fmt.Errorf("read Coinbase POST %s response: %w", path, err)
 	}
 	if response.StatusCode != http.StatusOK {
 		message := strings.TrimSpace(string(body))

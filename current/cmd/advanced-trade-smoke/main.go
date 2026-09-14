@@ -1,5 +1,6 @@
 // advanced-trade-smoke validates a Vault-stored Coinbase App API key with a
-// read-only permission lookup. It does not create orders or move funds.
+// authenticated Coinbase integration checker. Live execution is limited to an
+// explicitly approved BTC-USDC buy of no more than 1 USDC.
 package main
 
 import (
@@ -18,11 +19,14 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "resource: permissions, accounts, public-products, public-product, or preview-order")
+	resource := flag.String("resource", "permissions", "resource: permissions, accounts, public-products, public-product, preview-order, approval-phrase, or live-order")
 	productID := flag.String("product-id", "BTC-USD", "public product ID used with -resource=public-product")
 	side := flag.String("side", "BUY", "order side used with -resource=preview-order: BUY or SELL")
 	baseSize := flag.String("base-size", "", "base amount used with -resource=preview-order; set exactly one size")
 	quoteSize := flag.String("quote-size", "", "quote amount used with -resource=preview-order; set exactly one size")
+	previewID := flag.String("preview-id", "", "Coinbase preview UUID required for approval-phrase or live-order")
+	approvalPhrase := flag.String("approval-phrase", "", "exact phrase required for -resource=live-order")
+	confirmLiveOrder := flag.String("confirm-live-order", "", "must equal SUBMIT-1-USDC-BTC-USDC-BUY to submit a live order")
 	flag.Parse()
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSHandshakeTimeout = 60 * time.Second
@@ -45,6 +49,23 @@ func main() {
 		}
 		fmt.Println(string(response))
 		return
+	}
+	intent := coinbase.MarketOrderPreview{
+		ProductID: *productID,
+		Side:      *side,
+		BaseSize:  *baseSize,
+		QuoteSize: *quoteSize,
+	}
+	if *resource == "approval-phrase" {
+		phrase, err := intent.ApprovalPhraseForPreview(*previewID)
+		if err != nil {
+			log.Fatalf("prepare live order approval: %v", err)
+		}
+		fmt.Println(phrase)
+		return
+	}
+	if *resource == "live-order" && *confirmLiveOrder != "SUBMIT-1-USDC-BTC-USDC-BUY" {
+		log.Fatal("live order refused: pass -confirm-live-order=SUBMIT-1-USDC-BTC-USDC-BUY after reviewing a fresh preview")
 	}
 
 	var credentials coinbase.Credentials
@@ -71,12 +92,9 @@ func main() {
 	case "accounts":
 		response, err = coinbase.ListAdvancedTradeAccounts(context.Background(), client, credentials)
 	case "preview-order":
-		response, err = coinbase.PreviewOrder(context.Background(), client, credentials, coinbase.MarketOrderPreview{
-			ProductID: *productID,
-			Side:      *side,
-			BaseSize:  *baseSize,
-			QuoteSize: *quoteSize,
-		})
+		response, err = coinbase.PreviewOrder(context.Background(), client, credentials, intent)
+	case "live-order":
+		response, err = coinbase.CreateApprovedOneUSDCBTCBuy(context.Background(), client, credentials, intent, *previewID, *approvalPhrase)
 	default:
 		log.Fatalf("unsupported resource %q", *resource)
 	}

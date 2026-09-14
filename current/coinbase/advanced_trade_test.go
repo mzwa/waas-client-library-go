@@ -136,6 +136,54 @@ func TestPreviewOrderRejectsAmbiguousOrInvalidIntent(t *testing.T) {
 	}
 }
 
+func TestCreateApprovedOneUSDCBTCBuyPostsOnlyAfterApproval(t *testing.T) {
+	credentials := testCredentials(t)
+	intent := MarketOrderPreview{ProductID: "BTC-USDC", Side: "BUY", QuoteSize: "1.00"}
+	previewID := "2305bea7-c7af-47f2-b087-a7a52ffd85d8"
+	phrase, err := intent.ApprovalPhraseForPreview(previewID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodPost || request.URL.String() != "https://api.coinbase.com"+createOrderPath {
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL)
+		}
+		body, err := io.ReadAll(request.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := `{"client_order_id":"2305bea7-c7af-47f2-b087-a7a52ffd85d8","preview_id":"2305bea7-c7af-47f2-b087-a7a52ffd85d8","product_id":"BTC-USDC","side":"BUY","order_configuration":{"market_market_ioc":{"quote_size":"1.00","rfq_disabled":true}}}`
+		if string(body) != want {
+			t.Fatalf("request body = %s", body)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"success":true}`)), Header: make(http.Header)}, nil
+	})}
+
+	response, err := CreateApprovedOneUSDCBTCBuy(context.Background(), client, credentials, intent, previewID, phrase)
+	if err != nil || string(response) != `{"success":true}` {
+		t.Fatalf("CreateApprovedOneUSDCBTCBuy() = %s, %v", response, err)
+	}
+}
+
+func TestCreateApprovedOneUSDCBTCBuyRefusesUnsafeIntentBeforeRequest(t *testing.T) {
+	credentials := testCredentials(t)
+	client := &http.Client{Transport: roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		t.Fatal("unsafe live order reached HTTP client")
+		return nil, nil
+	})}
+	previewID := "2305bea7-c7af-47f2-b087-a7a52ffd85d8"
+	for _, intent := range []MarketOrderPreview{
+		{ProductID: "BTC-USDC", Side: "BUY", QuoteSize: "1.01"},
+		{ProductID: "BTC-USD", Side: "BUY", QuoteSize: "1.00"},
+		{ProductID: "BTC-USDC", Side: "SELL", QuoteSize: "1.00"},
+		{ProductID: "BTC-USDC", Side: "BUY", BaseSize: "0.001"},
+	} {
+		if _, err := CreateApprovedOneUSDCBTCBuy(context.Background(), client, credentials, intent, previewID, "invalid"); err == nil {
+			t.Fatalf("unsafe intent %+v unexpectedly proceeded", intent)
+		}
+	}
+}
+
 func TestRequireLiveOrderApprovalBindsPhraseToExactIntent(t *testing.T) {
 	intent := MarketOrderPreview{ProductID: "BTC-USD", Side: "BUY", QuoteSize: "10.00"}
 	phrase, err := intent.ApprovalPhrase()
@@ -152,14 +200,15 @@ func TestRequireLiveOrderApprovalBindsPhraseToExactIntent(t *testing.T) {
 
 func TestRequireLiveOrderApprovalForPreviewBindsPhraseToPreviewAndIntent(t *testing.T) {
 	intent := MarketOrderPreview{ProductID: "BTC-USDC", Side: "BUY", QuoteSize: "1.00"}
-	phrase, err := intent.ApprovalPhraseForPreview("preview-123")
+	previewID := "2305bea7-c7af-47f2-b087-a7a52ffd85d8"
+	phrase, err := intent.ApprovalPhraseForPreview(previewID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := RequireLiveOrderApprovalForPreview(intent, "preview-123", phrase); err != nil {
+	if err := RequireLiveOrderApprovalForPreview(intent, previewID, phrase); err != nil {
 		t.Fatalf("RequireLiveOrderApprovalForPreview() error = %v", err)
 	}
-	if err := RequireLiveOrderApprovalForPreview(intent, "preview-456", phrase); err == nil {
+	if err := RequireLiveOrderApprovalForPreview(intent, "e1c62f97-f4da-4ba6-9468-2f0adced3b7f", phrase); err == nil {
 		t.Fatal("approval phrase unexpectedly approved a different preview")
 	}
 	if _, err := intent.ApprovalPhraseForPreview(""); err == nil {
