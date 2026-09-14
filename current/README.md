@@ -131,6 +131,31 @@ go run ./current/cmd/advanced-trade-smoke \
   -journal-path=/var/lib/coinbase-trading/trades.jsonl
 ```
 
+## Paper trading and live risk policy
+
+The current policy permits at most one `BTC-USDC` BUY, up to 1 USDC, per
+`Africa/Johannesburg` calendar day. The same journal used for reconciliation is
+the source of truth. Therefore `-journal-path` is mandatory for both
+`paper-buy` and `live-order`. A file at
+`/var/lib/coinbase-trading/DISABLED` is a manual kill switch: while it exists,
+the live path refuses every order. Paper simulation never uses credentials or
+submits an order; it uses public price data and deliberately excludes a guessed
+fee estimate.
+
+```bash
+# Simulate a 1-USDC buy and report whether today's live policy permits it.
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=paper-buy -quote-size=1.00 \
+  -journal-path=/var/lib/coinbase-trading/trades.jsonl
+
+# Disable all future live orders immediately (does not affect paper trading).
+sudo install -d -m 700 /var/lib/coinbase-trading
+sudo touch /var/lib/coinbase-trading/DISABLED
+
+# Re-enable only after manual review.
+sudo rm /var/lib/coinbase-trading/DISABLED
+```
+
 ## Next stages
 
 1. Add paper-trading strategies and a daily budget policy before widening the

@@ -20,7 +20,7 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, public-products, public-product, preview-order, approval-phrase, or live-order")
+	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, paper-buy, public-products, public-product, preview-order, approval-phrase, or live-order")
 	productID := flag.String("product-id", "BTC-USD", "public product ID used with -resource=public-product")
 	side := flag.String("side", "BUY", "order side used with -resource=preview-order: BUY or SELL")
 	baseSize := flag.String("base-size", "", "base amount used with -resource=preview-order; set exactly one size")
@@ -30,6 +30,7 @@ func main() {
 	confirmLiveOrder := flag.String("confirm-live-order", "", "must equal SUBMIT-1-USDC-BTC-USDC-BUY to submit a live order")
 	orderID := flag.String("order-id", "", "Coinbase order UUID required for order-status or journal-order-status")
 	journalPath := flag.String("journal-path", "", "local JSONL journal path required for journal-order-status or verify-journal")
+	killSwitchPath := flag.String("kill-switch-path", "/var/lib/coinbase-trading/DISABLED", "existing file disables live orders")
 	flag.Parse()
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSHandshakeTimeout = 60 * time.Second
@@ -49,6 +50,32 @@ func main() {
 		response, err := coinbase.GetPublicProduct(context.Background(), client, *productID)
 		if err != nil {
 			log.Fatalf("read Coinbase public product: %v", err)
+		}
+		fmt.Println(string(response))
+		return
+	}
+	if *resource == "paper-buy" {
+		if *journalPath == "" {
+			log.Fatal("paper buy policy: -journal-path is required")
+		}
+		product, err := coinbase.GetPublicProduct(context.Background(), client, "BTC-USDC")
+		if err != nil {
+			log.Fatalf("read Coinbase public product: %v", err)
+		}
+		simulation, err := coinbase.SimulateOneUSDCBTCBuy(product, *quoteSize)
+		if err != nil {
+			log.Fatalf("simulate paper buy: %v", err)
+		}
+		policy, err := coinbase.EvaluateDailyBuyPolicy(*journalPath, *killSwitchPath, time.Now())
+		if err != nil {
+			log.Fatalf("evaluate paper-buy policy: %v", err)
+		}
+		response, err := json.Marshal(struct {
+			Simulation coinbase.PaperBuySimulation `json:"simulation"`
+			Policy     coinbase.PolicyDecision     `json:"policy"`
+		}{simulation, policy})
+		if err != nil {
+			log.Fatalf("encode paper-buy simulation: %v", err)
 		}
 		fmt.Println(string(response))
 		return
@@ -78,8 +105,17 @@ func main() {
 		fmt.Printf("{\"entries\":%d,\"last_hash\":%q}\n", entries, lastHash)
 		return
 	}
-	if *resource == "live-order" && *confirmLiveOrder != "SUBMIT-1-USDC-BTC-USDC-BUY" {
-		log.Fatal("live order refused: pass -confirm-live-order=SUBMIT-1-USDC-BTC-USDC-BUY after reviewing a fresh preview")
+	if *resource == "live-order" {
+		if *confirmLiveOrder != "SUBMIT-1-USDC-BTC-USDC-BUY" {
+			log.Fatal("live order refused: pass -confirm-live-order=SUBMIT-1-USDC-BTC-USDC-BUY after reviewing a fresh preview")
+		}
+		policy, policyErr := coinbase.EvaluateDailyBuyPolicy(*journalPath, *killSwitchPath, time.Now())
+		if policyErr != nil {
+			log.Fatalf("live order policy: %v", policyErr)
+		}
+		if !policy.Allowed {
+			log.Fatalf("live order refused by policy: %s", policy.Reason)
+		}
 	}
 
 	var credentials coinbase.Credentials

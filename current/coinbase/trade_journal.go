@@ -25,7 +25,9 @@ type TradeJournalEntry struct {
 	CompletionPercentage string `json:"completion_percentage"`
 	FilledSize           string `json:"filled_size"`
 	AverageFilledPrice   string `json:"average_filled_price"`
+	FilledValue          string `json:"filled_value"`
 	TotalFees            string `json:"total_fees"`
+	TotalValueAfterFees  string `json:"total_value_after_fees"`
 	PreviousHash         string `json:"previous_hash"`
 	Hash                 string `json:"hash"`
 }
@@ -114,7 +116,9 @@ func AppendOrderStatusToJournal(path string, orderStatus []byte, recordedAt time
 		CompletionPercentage: response.Order.CompletionPercentage,
 		FilledSize:           response.Order.FilledSize,
 		AverageFilledPrice:   response.Order.AverageFilledPrice,
+		FilledValue:          response.Order.FilledValue,
 		TotalFees:            response.Order.TotalFees,
+		TotalValueAfterFees:  response.Order.TotalValueAfterFees,
 		PreviousHash:         previousHash,
 	}
 	entry.Hash, err = entry.expectedHash()
@@ -156,14 +160,29 @@ func decodeOrderStatus(orderStatus []byte) (coinbaseOrderResponse, error) {
 // VerifyTradeJournal validates every hash-chain link and returns the last hash
 // plus the number of entries. A missing journal is valid and has no entries.
 func VerifyTradeJournal(path string) (lastHash string, entries int, err error) {
-	file, err := os.Open(path)
-	if os.IsNotExist(err) {
+	journal, err := ReadTradeJournal(path)
+	if err != nil {
+		return "", 0, err
+	}
+	if len(journal) == 0 {
 		return "", 0, nil
 	}
+	return journal[len(journal)-1].Hash, len(journal), nil
+}
+
+// ReadTradeJournal verifies and returns every journal entry. A missing journal
+// is valid and returns an empty list.
+func ReadTradeJournal(path string) ([]TradeJournalEntry, error) {
+	file, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
 	if err != nil {
-		return "", 0, fmt.Errorf("open trade journal: %w", err)
+		return nil, fmt.Errorf("open trade journal: %w", err)
 	}
 	defer file.Close()
+	var journal []TradeJournalEntry
+	lastHash := ""
 	scanner := bufio.NewScanner(file)
 	scanner.Buffer(make([]byte, 4096), 1<<20)
 	for scanner.Scan() {
@@ -173,25 +192,25 @@ func VerifyTradeJournal(path string) (lastHash string, entries int, err error) {
 		}
 		var entry TradeJournalEntry
 		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			return "", entries, fmt.Errorf("decode trade journal entry %d: %w", entries+1, err)
+			return nil, fmt.Errorf("decode trade journal entry %d: %w", len(journal)+1, err)
 		}
 		if entry.PreviousHash != lastHash {
-			return "", entries, fmt.Errorf("trade journal chain mismatch at entry %d", entries+1)
+			return nil, fmt.Errorf("trade journal chain mismatch at entry %d", len(journal)+1)
 		}
 		expected, err := entry.expectedHash()
 		if err != nil {
-			return "", entries, err
+			return nil, err
 		}
 		if entry.Hash != expected {
-			return "", entries, fmt.Errorf("trade journal hash mismatch at entry %d", entries+1)
+			return nil, fmt.Errorf("trade journal hash mismatch at entry %d", len(journal)+1)
 		}
 		lastHash = entry.Hash
-		entries++
+		journal = append(journal, entry)
 	}
 	if err := scanner.Err(); err != nil {
-		return "", entries, fmt.Errorf("read trade journal: %w", err)
+		return nil, fmt.Errorf("read trade journal: %w", err)
 	}
-	return lastHash, entries, nil
+	return journal, nil
 }
 
 func (entry TradeJournalEntry) expectedHash() (string, error) {

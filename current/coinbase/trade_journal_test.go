@@ -11,7 +11,7 @@ import (
 
 func TestTradeJournalChainsAndDetectsTampering(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "trades.jsonl")
-	status := []byte(`{"order":{"order_id":"e2ac36ac-25c4-465b-9783-bdef0db2cac1","client_order_id":"488b8be3-fa7e-473e-a8bf-bb855a17ebe6","product_id":"BTC-USDC","side":"BUY","status":"FILLED","completion_percentage":"100","filled_size":"0.00001264","average_filled_price":"77478.01","total_fees":"0.01"}}`)
+	status := []byte(`{"order":{"order_id":"e2ac36ac-25c4-465b-9783-bdef0db2cac1","client_order_id":"488b8be3-fa7e-473e-a8bf-bb855a17ebe6","product_id":"BTC-USDC","side":"BUY","status":"FILLED","completion_percentage":"100","filled_size":"0.00001264","average_filled_price":"77478.01","filled_value":"0.98","total_fees":"0.01","total_value_after_fees":"0.99"}}`)
 	entry, err := AppendOrderStatusToJournal(path, status, time.Date(2026, 9, 14, 7, 40, 0, 0, time.UTC))
 	if err != nil {
 		t.Fatal(err)
