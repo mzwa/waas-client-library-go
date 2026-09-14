@@ -53,3 +53,38 @@ func TestBacktestSMA7RejectsUnsafeInputs(t *testing.T) {
 		t.Fatal("zero starting capital unexpectedly succeeded")
 	}
 }
+
+func TestEvaluateSMAResearchGateRequiresEveryWindowToPass(t *testing.T) {
+	candles := `{"candles":[
+{"start":"1","open":"10","close":"10"},
+{"start":"2","open":"10","close":"11"},
+{"start":"3","open":"12","close":"12"},
+{"start":"4","open":"12","close":"8"},
+{"start":"5","open":"12","close":"7"}
+]}`
+	gate, err := EvaluateSMAResearchGate([]byte(candles), "100", "0.01", 2, []int{5})
+	if err != nil {
+		t.Fatalf("EvaluateSMAResearchGate() error = %v", err)
+	}
+	if !gate.Passed || !gate.Windows[0].Passed {
+		t.Fatalf("gate = %+v, want pass", gate)
+	}
+
+	flatTrend := `{"candles":[
+{"start":"1","open":"10","close":"10"},
+{"start":"2","open":"10","close":"11"},
+{"start":"3","open":"10","close":"12"},
+{"start":"4","open":"10","close":"13"},
+{"start":"5","open":"10","close":"14"}
+]}`
+	rejected, err := EvaluateSMAResearchGate([]byte(flatTrend), "100", "0.01", 2, []int{5})
+	if err != nil {
+		t.Fatalf("EvaluateSMAResearchGate() error = %v", err)
+	}
+	if rejected.Passed {
+		t.Fatalf("gate = %+v, want rejection", rejected)
+	}
+	if len(rejected.Windows) != 1 || rejected.Windows[0].Passed {
+		t.Fatalf("windows = %+v, want a failed result", rejected.Windows)
+	}
+}

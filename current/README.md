@@ -190,6 +190,28 @@ go run ./current/cmd/advanced-trade-smoke \
   -backtest-fee-rate=0.012
 ```
 
+## Slower-rule research gate
+
+`research-gate` evaluates a slower moving-average rule over several independent
+lookback windows in one public-data request. It passes only when the rule beats
+buy-and-hold after the modeled fees **and** has no greater maximum drawdown in
+every requested window. A pass remains research evidence only: it does not
+enable, schedule, or authorize any order.
+
+The defaults test an SMA-30 rule across 120, 180, and 350 days. Coinbase makes
+at most 350 daily candles available per request, so this is a screening tool,
+not a complete multi-year validation.
+
+```bash
+# Research only: this cannot read credentials or submit a trade.
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=research-gate \
+  -research-sma-window=30 \
+  -research-windows=120,180,350 \
+  -backtest-starting-usdc=20 \
+  -backtest-fee-rate=0.012
+```
+
 ## Next stages
 
 1. Add paper-trading strategies and a daily budget policy before widening the
