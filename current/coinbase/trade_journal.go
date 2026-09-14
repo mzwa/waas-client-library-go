@@ -25,9 +25,9 @@ type TradeJournalEntry struct {
 	CompletionPercentage string `json:"completion_percentage"`
 	FilledSize           string `json:"filled_size"`
 	AverageFilledPrice   string `json:"average_filled_price"`
-	FilledValue          string `json:"filled_value"`
+	FilledValue          string `json:"filled_value,omitempty"`
 	TotalFees            string `json:"total_fees"`
-	TotalValueAfterFees  string `json:"total_value_after_fees"`
+	TotalValueAfterFees  string `json:"total_value_after_fees,omitempty"`
 	PreviousHash         string `json:"previous_hash"`
 	Hash                 string `json:"hash"`
 }

@@ -1,6 +1,9 @@
 package coinbase
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -47,5 +50,51 @@ func TestSummarizeOrderStatusOmitsAccountIdentifiers(t *testing.T) {
 	encoded := fmt.Sprintf("%+v", summary)
 	if strings.Contains(encoded, "private-user") || strings.Contains(encoded, "private-portfolio") {
 		t.Fatalf("summary leaked an account identifier: %s", encoded)
+	}
+}
+
+func TestVerifyTradeJournalAcceptsEntryFromPreSpendSchema(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trades.jsonl")
+	type legacyEntry struct {
+		RecordedAt           string `json:"recorded_at"`
+		OrderID              string `json:"order_id"`
+		PreviewID            string `json:"preview_id"`
+		ProductID            string `json:"product_id"`
+		Side                 string `json:"side"`
+		Status               string `json:"status"`
+		CompletionPercentage string `json:"completion_percentage"`
+		FilledSize           string `json:"filled_size"`
+		AverageFilledPrice   string `json:"average_filled_price"`
+		TotalFees            string `json:"total_fees"`
+		PreviousHash         string `json:"previous_hash"`
+		Hash                 string `json:"hash"`
+	}
+	entry := legacyEntry{
+		RecordedAt:           "2026-09-14T05:40:00Z",
+		OrderID:              "e2ac36ac-25c4-465b-9783-bdef0db2cac1",
+		PreviewID:            "488b8be3-fa7e-473e-a8bf-bb855a17ebe6",
+		ProductID:            "BTC-USDC",
+		Side:                 "BUY",
+		Status:               "FILLED",
+		CompletionPercentage: "99.107",
+		FilledSize:           "0.00001264",
+		AverageFilledPrice:   "77478.01",
+		TotalFees:            "0.0117518645568",
+	}
+	canonical, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(canonical)
+	entry.Hash = hex.EncodeToString(digest[:])
+	encoded, err := json.Marshal(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(encoded, '\n'), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, entries, err := VerifyTradeJournal(path); err != nil || entries != 1 {
+		t.Fatalf("legacy journal verification = %d entries, %v", entries, err)
 	}
 }
