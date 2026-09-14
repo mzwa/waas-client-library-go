@@ -160,6 +160,30 @@ type SMAResearchGate struct {
 	Windows   []SMAResearchWindow `json:"windows"`
 }
 
+// SMARollingResearchWindow records one chronological test period. Its candle
+// range does not overlap another window when the caller uses stepDays equal to
+// windowDays.
+type SMARollingResearchWindow struct {
+	Start          string      `json:"start"`
+	End            string      `json:"end"`
+	Result         SMABacktest `json:"result"`
+	Passed         bool        `json:"passed"`
+	FailureReasons []string    `json:"failure_reasons"`
+}
+
+// SMARollingResearchGate applies the same conservative checks to many
+// chronological windows spanning a longer history. It is research-only and
+// has no authority to submit an order.
+type SMARollingResearchGate struct {
+	SMAWindow  int                        `json:"sma_window"`
+	WindowDays int                        `json:"window_days"`
+	StepDays   int                        `json:"step_days"`
+	FeeRate    string                     `json:"fee_rate"`
+	Passed     bool                       `json:"passed"`
+	Reason     string                     `json:"reason"`
+	Windows    []SMARollingResearchWindow `json:"windows"`
+}
+
 // EvaluateSMAResearchGate evaluates the newest days in each requested
 // duration. The candle payload may contain up to Coinbase's 350 daily buckets.
 func EvaluateSMAResearchGate(candleJSON []byte, startingUSDC, feeRate string, smaWindow int, durations []int) (SMAResearchGate, error) {
@@ -223,6 +247,72 @@ func EvaluateSMAResearchGate(candleJSON []byte, startingUSDC, feeRate string, sm
 		gate.Reason = "passed research gate only; this does not authorize a live order"
 	} else {
 		gate.Reason = "rejected: every historical window must beat buy-and-hold after fees with no larger drawdown"
+	}
+	return gate, nil
+}
+
+// EvaluateSMARollingResearchGate evaluates fixed-length chronological windows
+// from a longer candle history. A window passes only if the strategy
+// outperforms buy-and-hold after fees and has no larger drawdown.
+func EvaluateSMARollingResearchGate(candleJSON []byte, startingUSDC, feeRate string, smaWindow, windowDays, stepDays int) (SMARollingResearchGate, error) {
+	if smaWindow < 2 || windowDays < smaWindow+2 || stepDays < 1 {
+		return SMARollingResearchGate{}, fmt.Errorf("invalid rolling research settings")
+	}
+	var response struct {
+		Candles []Candle `json:"candles"`
+	}
+	if err := json.Unmarshal(candleJSON, &response); err != nil {
+		return SMARollingResearchGate{}, fmt.Errorf("decode Coinbase candles: %w", err)
+	}
+	if len(response.Candles) < windowDays {
+		return SMARollingResearchGate{}, fmt.Errorf("rolling research requires at least %d daily candles", windowDays)
+	}
+	for index, candle := range response.Candles {
+		if _, err := strconv.ParseInt(candle.Start, 10, 64); err != nil {
+			return SMARollingResearchGate{}, fmt.Errorf("invalid candle start at index %d", index)
+		}
+	}
+	sort.Slice(response.Candles, func(i, j int) bool {
+		left, _ := strconv.ParseInt(response.Candles[i].Start, 10, 64)
+		right, _ := strconv.ParseInt(response.Candles[j].Start, 10, 64)
+		return left < right
+	})
+	gate := SMARollingResearchGate{
+		SMAWindow: smaWindow, WindowDays: windowDays, StepDays: stepDays, FeeRate: feeRate, Passed: true,
+	}
+	for first := 0; first+windowDays <= len(response.Candles); first += stepDays {
+		candles := response.Candles[first : first+windowDays]
+		payload, err := json.Marshal(struct {
+			Candles []Candle `json:"candles"`
+		}{Candles: candles})
+		if err != nil {
+			return SMARollingResearchGate{}, fmt.Errorf("encode rolling research window: %w", err)
+		}
+		report, err := BacktestSMA(payload, startingUSDC, feeRate, smaWindow)
+		if err != nil {
+			return SMARollingResearchGate{}, err
+		}
+		outperformance, _ := new(big.Rat).SetString(report.OutperformanceUSDC)
+		strategyDrawdown, _ := new(big.Rat).SetString(report.StrategyMaxDrawdownPct)
+		buyHoldDrawdown, _ := new(big.Rat).SetString(report.BuyHoldMaxDrawdownPct)
+		window := SMARollingResearchWindow{Start: candles[0].Start, End: candles[len(candles)-1].Start, Result: report, Passed: true}
+		if outperformance.Sign() <= 0 {
+			window.Passed = false
+			window.FailureReasons = append(window.FailureReasons, "did not outperform buy-and-hold after modeled fees")
+		}
+		if strategyDrawdown.Cmp(buyHoldDrawdown) > 0 {
+			window.Passed = false
+			window.FailureReasons = append(window.FailureReasons, "maximum drawdown exceeded buy-and-hold")
+		}
+		if !window.Passed {
+			gate.Passed = false
+		}
+		gate.Windows = append(gate.Windows, window)
+	}
+	if gate.Passed {
+		gate.Reason = "passed chronological research windows only; this does not authorize a live order"
+	} else {
+		gate.Reason = "rejected: every chronological window must beat buy-and-hold after fees with no larger drawdown"
 	}
 	return gate, nil
 }

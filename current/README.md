@@ -192,7 +192,7 @@ go run ./current/cmd/advanced-trade-smoke \
 
 ## Slower-rule research gate
 
-`research-gate` evaluates a slower moving-average rule over several independent
+`research-gate` evaluates a slower moving-average rule over several overlapping
 lookback windows in one public-data request. It passes only when the rule beats
 buy-and-hold after the modeled fees **and** has no greater maximum drawdown in
 every requested window. A pass remains research evidence only: it does not
@@ -208,6 +208,26 @@ go run ./current/cmd/advanced-trade-smoke \
   -resource=research-gate \
   -research-sma-window=30 \
   -research-windows=120,180,350 \
+  -backtest-starting-usdc=20 \
+  -backtest-fee-rate=0.012
+```
+
+## Multi-year chronological research gate
+
+`rolling-research-gate` downloads public daily candles in 350-day chunks and
+tests the rule over chronological windows. With the defaults, three years of
+history is divided into non-overlapping 180-day test periods. It applies the
+same strict return and drawdown checks to every period. This remains research
+only—its result cannot enable a live order.
+
+```bash
+# Research only: public market data, no credentials, no trade submission.
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=rolling-research-gate \
+  -rolling-years=3 \
+  -research-sma-window=30 \
+  -rolling-window-days=180 \
+  -rolling-step-days=180 \
   -backtest-starting-usdc=20 \
   -backtest-fee-rate=0.012
 ```

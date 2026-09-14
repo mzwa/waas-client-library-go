@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -228,6 +229,48 @@ func GetPublicProductCandles(ctx context.Context, client *http.Client, productID
 	query.Set("limit", strconv.Itoa(limit))
 	path := publicProductsPath + "/" + url.PathEscape(productID) + "/candles?" + query.Encode()
 	return getPublicAdvancedTrade(ctx, client, path)
+}
+
+// GetPublicProductCandleHistory retrieves a longer public candle range in
+// Coinbase's maximum 350-bucket chunks. Boundary candles are de-duplicated by
+// their start timestamp. It uses no credentials.
+func GetPublicProductCandleHistory(ctx context.Context, client *http.Client, productID string, start, end time.Time, granularity string) ([]byte, error) {
+	if !end.After(start) {
+		return nil, fmt.Errorf("candle end time must be after start time")
+	}
+	byStart := make(map[string]Candle)
+	for cursor := start; cursor.Before(end); {
+		next := cursor.Add(350 * 24 * time.Hour)
+		if next.After(end) {
+			next = end
+		}
+		page, err := GetPublicProductCandles(ctx, client, productID, cursor, next, granularity, 350)
+		if err != nil {
+			return nil, err
+		}
+		var response struct {
+			Candles []Candle `json:"candles"`
+		}
+		if err := json.Unmarshal(page, &response); err != nil {
+			return nil, fmt.Errorf("decode Coinbase candle page: %w", err)
+		}
+		for _, candle := range response.Candles {
+			byStart[candle.Start] = candle
+		}
+		cursor = next
+	}
+	candles := make([]Candle, 0, len(byStart))
+	for _, candle := range byStart {
+		candles = append(candles, candle)
+	}
+	sort.Slice(candles, func(i, j int) bool {
+		left, _ := strconv.ParseInt(candles[i].Start, 10, 64)
+		right, _ := strconv.ParseInt(candles[j].Start, 10, 64)
+		return left < right
+	})
+	return json.Marshal(struct {
+		Candles []Candle `json:"candles"`
+	}{Candles: candles})
 }
 
 func getPublicAdvancedTrade(ctx context.Context, client *http.Client, path string) ([]byte, error) {

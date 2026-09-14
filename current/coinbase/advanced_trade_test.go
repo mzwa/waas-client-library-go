@@ -132,6 +132,31 @@ func TestGetPublicProductCandlesUsesBoundedUnauthenticatedRequest(t *testing.T) 
 	}
 }
 
+func TestGetPublicProductCandleHistoryChunksAndDeduplicates(t *testing.T) {
+	start := time.Unix(1_700_000_000, 0)
+	end := start.Add(351 * 24 * time.Hour)
+	calls := 0
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		calls++
+		if request.Header.Get("Authorization") != "" {
+			t.Fatal("public candle history unexpectedly sent Authorization")
+		}
+		body := `{"candles":[{"start":"1700000000","open":"1","close":"1"}]}`
+		if calls == 2 {
+			body = `{"candles":[{"start":"1730240000","open":"2","close":"2"}]}`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}
+
+	response, err := GetPublicProductCandleHistory(context.Background(), client, "BTC-USDC", start, end, "ONE_DAY")
+	if err != nil {
+		t.Fatalf("GetPublicProductCandleHistory() error = %v", err)
+	}
+	if calls != 2 || !strings.Contains(string(response), `"start":"1700000000"`) || !strings.Contains(string(response), `"start":"1730240000"`) {
+		t.Fatalf("calls = %d, response = %s", calls, response)
+	}
+}
+
 func TestPreviewOrderPostsOnlyToPreviewEndpoint(t *testing.T) {
 	credentials := testCredentials(t)
 	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {

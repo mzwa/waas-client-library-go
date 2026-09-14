@@ -22,7 +22,7 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, paper-buy, performance, backtest-sma7, research-gate, public-products, public-product, preview-order, approval-phrase, or live-order")
+	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, paper-buy, performance, backtest-sma7, research-gate, rolling-research-gate, public-products, public-product, preview-order, approval-phrase, or live-order")
 	productID := flag.String("product-id", "BTC-USD", "public product ID used with -resource=public-product")
 	side := flag.String("side", "BUY", "order side used with -resource=preview-order: BUY or SELL")
 	baseSize := flag.String("base-size", "", "base amount used with -resource=preview-order; set exactly one size")
@@ -38,6 +38,9 @@ func main() {
 	backtestFeeRate := flag.String("backtest-fee-rate", "0.012", "paper fee rate per fill used with -resource=backtest-sma7, e.g. 0.012 for 1.2%")
 	researchSMAWindow := flag.Int("research-sma-window", 30, "moving-average days used with -resource=research-gate")
 	researchWindows := flag.String("research-windows", "120,180,350", "comma-separated historical days used with -resource=research-gate")
+	rollingYears := flag.Int("rolling-years", 3, "public history years used with -resource=rolling-research-gate; 1 through 5")
+	rollingWindowDays := flag.Int("rolling-window-days", 180, "days per chronological test used with -resource=rolling-research-gate")
+	rollingStepDays := flag.Int("rolling-step-days", 180, "days between chronological tests used with -resource=rolling-research-gate")
 	flag.Parse()
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSHandshakeTimeout = 60 * time.Second
@@ -154,6 +157,27 @@ func main() {
 		response, err := json.Marshal(gate)
 		if err != nil {
 			log.Fatalf("encode SMA research gate: %v", err)
+		}
+		fmt.Println(string(response))
+		return
+	}
+	if *resource == "rolling-research-gate" {
+		if *researchSMAWindow < 2 || *rollingYears < 1 || *rollingYears > 5 || *rollingWindowDays < *researchSMAWindow+2 || *rollingStepDays < 1 {
+			log.Fatal("rolling research gate: use SMA window >= 2, years 1 through 5, window >= SMA window + 2, and positive step")
+		}
+		end := time.Now().UTC()
+		start := end.Add(-time.Duration(*rollingYears*365) * 24 * time.Hour)
+		candles, err := coinbase.GetPublicProductCandleHistory(context.Background(), client, "BTC-USDC", start, end, "ONE_DAY")
+		if err != nil {
+			log.Fatalf("read Coinbase multi-year daily candles: %v", err)
+		}
+		gate, err := coinbase.EvaluateSMARollingResearchGate(candles, *backtestStartingUSDC, *backtestFeeRate, *researchSMAWindow, *rollingWindowDays, *rollingStepDays)
+		if err != nil {
+			log.Fatalf("run rolling SMA research gate: %v", err)
+		}
+		response, err := json.Marshal(gate)
+		if err != nil {
+			log.Fatalf("encode rolling SMA research gate: %v", err)
 		}
 		fmt.Println(string(response))
 		return

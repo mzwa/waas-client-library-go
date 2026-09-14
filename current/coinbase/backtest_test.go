@@ -88,3 +88,17 @@ func TestEvaluateSMAResearchGateRequiresEveryWindowToPass(t *testing.T) {
 		t.Fatalf("windows = %+v, want a failed result", rejected.Windows)
 	}
 }
+
+func TestEvaluateSMARollingResearchGateUsesChronologicalWindows(t *testing.T) {
+	candles := `{"candles":[
+{"start":"1","open":"10","close":"10"},{"start":"2","open":"10","close":"11"},{"start":"3","open":"12","close":"12"},{"start":"4","open":"12","close":"8"},{"start":"5","open":"12","close":"7"},
+{"start":"6","open":"10","close":"10"},{"start":"7","open":"10","close":"11"},{"start":"8","open":"12","close":"12"},{"start":"9","open":"12","close":"8"},{"start":"10","open":"12","close":"7"}
+]}`
+	gate, err := EvaluateSMARollingResearchGate([]byte(candles), "100", "0.01", 2, 5, 5)
+	if err != nil {
+		t.Fatalf("EvaluateSMARollingResearchGate() error = %v", err)
+	}
+	if !gate.Passed || len(gate.Windows) != 2 || gate.Windows[0].Start != "1" || gate.Windows[1].Start != "6" {
+		t.Fatalf("gate = %+v", gate)
+	}
+}
