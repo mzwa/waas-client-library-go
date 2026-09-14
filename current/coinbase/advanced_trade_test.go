@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 type roundTripperFunc func(*http.Request) (*http.Response, error)
@@ -105,6 +106,29 @@ func TestGetPublicProductUsesProductPath(t *testing.T) {
 	response, err := GetPublicProduct(context.Background(), client, "BTC-USD")
 	if err != nil || string(response) != `{"product_id":"BTC-USD"}` {
 		t.Fatalf("GetPublicProduct() = %s, %v", response, err)
+	}
+}
+
+func TestGetPublicProductCandlesUsesBoundedUnauthenticatedRequest(t *testing.T) {
+	start := time.Unix(1_700_000_000, 0)
+	end := start.Add(30 * 24 * time.Hour)
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.Path != publicProductsPath+"/BTC-USDC/candles" {
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL)
+		}
+		query := request.URL.Query()
+		if query.Get("start") != "1700000000" || query.Get("end") != "1702592000" || query.Get("granularity") != "ONE_DAY" || query.Get("limit") != "30" {
+			t.Fatalf("unexpected candle query: %s", request.URL.RawQuery)
+		}
+		if request.Header.Get("Authorization") != "" {
+			t.Fatal("public candle request unexpectedly sent Authorization")
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"candles":[]}`)), Header: make(http.Header)}, nil
+	})}
+
+	response, err := GetPublicProductCandles(context.Background(), client, "BTC-USDC", start, end, "ONE_DAY", 30)
+	if err != nil || string(response) != `{"candles":[]}` {
+		t.Fatalf("GetPublicProductCandles() = %s, %v", response, err)
 	}
 }
 

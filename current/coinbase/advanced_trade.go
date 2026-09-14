@@ -9,6 +9,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -202,6 +203,31 @@ func GetPublicProduct(ctx context.Context, client *http.Client, productID string
 		return nil, fmt.Errorf("Coinbase product ID is required")
 	}
 	return getPublicAdvancedTrade(ctx, client, publicProductsPath+"/"+url.PathEscape(productID))
+}
+
+// GetPublicProductCandles retrieves public OHLCV candles without credentials.
+// Coinbase limits candle responses to 350 buckets, so callers should request a
+// bounded time range.
+func GetPublicProductCandles(ctx context.Context, client *http.Client, productID string, start, end time.Time, granularity string, limit int) ([]byte, error) {
+	if strings.TrimSpace(productID) == "" {
+		return nil, fmt.Errorf("Coinbase product ID is required")
+	}
+	if !end.After(start) {
+		return nil, fmt.Errorf("candle end time must be after start time")
+	}
+	if strings.TrimSpace(granularity) == "" {
+		return nil, fmt.Errorf("candle granularity is required")
+	}
+	if limit < 1 || limit > 350 {
+		return nil, fmt.Errorf("candle limit must be between 1 and 350")
+	}
+	query := url.Values{}
+	query.Set("start", strconv.FormatInt(start.Unix(), 10))
+	query.Set("end", strconv.FormatInt(end.Unix(), 10))
+	query.Set("granularity", granularity)
+	query.Set("limit", strconv.Itoa(limit))
+	path := publicProductsPath + "/" + url.PathEscape(productID) + "/candles?" + query.Encode()
+	return getPublicAdvancedTrade(ctx, client, path)
 }
 
 func getPublicAdvancedTrade(ctx context.Context, client *http.Client, path string) ([]byte, error) {

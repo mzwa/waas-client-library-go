@@ -168,6 +168,28 @@ go run ./current/cmd/advanced-trade-smoke \
   -journal-path=/var/lib/coinbase-trading/trades.jsonl
 ```
 
+## Historical paper backtest
+
+`backtest-sma7` is a research-only comparison of a seven-day moving-average
+strategy against buying and holding BTC-USDC. It requests public daily candles,
+uses a prior-close signal with a next-open simulated fill, and never reads a
+credential, journal, or submits an order. It reports the number of simulated
+trades, ending value, return, and maximum drawdown for both approaches.
+
+The default `0.012` fee rate is the approximately 1.2% all-in fee observed on
+the initial small live order. It is only a fixed modelling assumption: actual
+fees can change and a fresh authenticated Coinbase preview remains required
+before any real order.
+
+```bash
+# Research only: no credentials and no order submission.
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=backtest-sma7 \
+  -backtest-days=30 \
+  -backtest-starting-usdc=20 \
+  -backtest-fee-rate=0.012
+```
+
 ## Next stages
 
 1. Add paper-trading strategies and a daily budget policy before widening the
