@@ -70,7 +70,7 @@ func EvaluateDailyBuyPolicy(journalPath, killSwitchPath string, now time.Time) (
 			continue
 		}
 		decision.OrdersToday++
-		if amount, ok := new(big.Rat).SetString(entry.TotalValueAfterFees); ok && amount.Sign() >= 0 {
+		if amount, ok := journalEntrySpend(entry); ok {
 			spend.Add(spend, amount)
 		}
 	}
@@ -86,6 +86,26 @@ func EvaluateDailyBuyPolicy(journalPath, killSwitchPath string, now time.Time) (
 	}
 	decision.Allowed = true
 	return decision, nil
+}
+
+func journalEntrySpend(entry TradeJournalEntry) (*big.Rat, bool) {
+	if amount, ok := new(big.Rat).SetString(entry.TotalValueAfterFees); ok && amount.Sign() >= 0 {
+		return amount, true
+	}
+	filledSize, sizeOK := new(big.Rat).SetString(entry.FilledSize)
+	averagePrice, priceOK := new(big.Rat).SetString(entry.AverageFilledPrice)
+	if !sizeOK || !priceOK || filledSize.Sign() < 0 || averagePrice.Sign() < 0 {
+		return nil, false
+	}
+	spend := new(big.Rat).Mul(filledSize, averagePrice)
+	if entry.TotalFees == "" {
+		return spend, true
+	}
+	fees, feesOK := new(big.Rat).SetString(entry.TotalFees)
+	if !feesOK || fees.Sign() < 0 {
+		return nil, false
+	}
+	return spend.Add(spend, fees), true
 }
 
 // PaperBuySimulation estimates a BTC-USDC market buy using current public
