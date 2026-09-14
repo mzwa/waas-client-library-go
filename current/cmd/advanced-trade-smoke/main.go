@@ -20,7 +20,7 @@ func main() {
 	source := flag.String("source", "vault", "credential source: vault or env")
 	mount := flag.String("vault-mount", "secret", "Vault KV v2 mount")
 	path := flag.String("vault-path", "coinbase/advanced-trade/live", "Vault secret path")
-	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, paper-buy, public-products, public-product, preview-order, approval-phrase, or live-order")
+	resource := flag.String("resource", "permissions", "resource: permissions, accounts, order-status, journal-order-status, verify-journal, paper-buy, performance, public-products, public-product, preview-order, approval-phrase, or live-order")
 	productID := flag.String("product-id", "BTC-USD", "public product ID used with -resource=public-product")
 	side := flag.String("side", "BUY", "order side used with -resource=preview-order: BUY or SELL")
 	baseSize := flag.String("base-size", "", "base amount used with -resource=preview-order; set exactly one size")
@@ -76,6 +76,25 @@ func main() {
 		}{simulation, policy})
 		if err != nil {
 			log.Fatalf("encode paper-buy simulation: %v", err)
+		}
+		fmt.Println(string(response))
+		return
+	}
+	if *resource == "performance" {
+		if *journalPath == "" {
+			log.Fatal("performance report: -journal-path is required")
+		}
+		product, err := coinbase.GetPublicProduct(context.Background(), client, "BTC-USDC")
+		if err != nil {
+			log.Fatalf("read Coinbase public product: %v", err)
+		}
+		report, err := coinbase.CalculateBTCUSDCPerformance(*journalPath, product)
+		if err != nil {
+			log.Fatalf("calculate BTC-USDC performance: %v", err)
+		}
+		response, err := json.Marshal(report)
+		if err != nil {
+			log.Fatalf("encode BTC-USDC performance: %v", err)
 		}
 		fmt.Println(string(response))
 		return

@@ -46,3 +46,18 @@ func TestSimulateOneUSDCBTCBuyUsesPublicPriceOnly(t *testing.T) {
 		t.Fatalf("unexpected simulation: %+v", simulation)
 	}
 }
+
+func TestCalculateBTCUSDCPerformanceUsesVerifiedJournal(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "trades.jsonl")
+	status := []byte(`{"order":{"order_id":"e2ac36ac-25c4-465b-9783-bdef0db2cac1","client_order_id":"488b8be3-fa7e-473e-a8bf-bb855a17ebe6","product_id":"BTC-USDC","side":"BUY","status":"FILLED","completion_percentage":"100","filled_size":"0.0000125","average_filled_price":"80000","total_fees":"0"}}`)
+	if _, err := AppendOrderStatusToJournal(path, status, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	report, err := CalculateBTCUSDCPerformance(path, []byte(`{"product_id":"BTC-USDC","price":"88000"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.CurrentValueUSDC != "1.10000000" || report.UnrealizedPnLUSDC != "0.10000000" || report.UnrealizedReturnPct != "10.0000" {
+		t.Fatalf("unexpected performance report: %+v", report)
+	}
+}

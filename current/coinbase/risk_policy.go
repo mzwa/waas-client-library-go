@@ -119,6 +119,77 @@ type PaperBuySimulation struct {
 	FeeEstimateNotice string `json:"fee_estimate_notice"`
 }
 
+// BTCUSDCPerformance reports the mark-to-market result for BTC-USDC buys that
+// remain in the local journal. The current project has no sell path, so all
+// filled buys are treated as still held. It is read-only and uses public price
+// data only.
+type BTCUSDCPerformance struct {
+	JournalEntries      int    `json:"journal_entries"`
+	BTCHeld             string `json:"btc_held"`
+	CostBasisUSDC       string `json:"cost_basis_usdc"`
+	CurrentPriceUSDC    string `json:"current_price_usdc"`
+	CurrentValueUSDC    string `json:"current_value_usdc"`
+	UnrealizedPnLUSDC   string `json:"unrealized_pnl_usdc"`
+	UnrealizedReturnPct string `json:"unrealized_return_pct"`
+}
+
+// CalculateBTCUSDCPerformance combines a verified journal with one public
+// BTC-USDC product response. It never reads credentials or sends an order.
+func CalculateBTCUSDCPerformance(journalPath string, productJSON []byte) (BTCUSDCPerformance, error) {
+	journal, err := ReadTradeJournal(journalPath)
+	if err != nil {
+		return BTCUSDCPerformance{}, err
+	}
+	var product struct {
+		ProductID string `json:"product_id"`
+		Price     string `json:"price"`
+	}
+	if err := json.Unmarshal(productJSON, &product); err != nil {
+		return BTCUSDCPerformance{}, fmt.Errorf("decode Coinbase public product: %w", err)
+	}
+	if product.ProductID != liveOrderProductID {
+		return BTCUSDCPerformance{}, fmt.Errorf("performance refused: expected %s public product", liveOrderProductID)
+	}
+	price, ok := new(big.Rat).SetString(product.Price)
+	if !ok || price.Sign() <= 0 {
+		return BTCUSDCPerformance{}, fmt.Errorf("performance refused: Coinbase product price is invalid")
+	}
+	btcHeld := new(big.Rat)
+	costBasis := new(big.Rat)
+	entries := 0
+	for _, entry := range journal {
+		if entry.ProductID != liveOrderProductID || entry.Side != liveOrderSide || entry.Status != "FILLED" {
+			continue
+		}
+		btc, ok := new(big.Rat).SetString(entry.FilledSize)
+		if !ok || btc.Sign() < 0 {
+			return BTCUSDCPerformance{}, fmt.Errorf("performance refused: journal has invalid BTC fill for order %s", entry.OrderID)
+		}
+		spend, ok := journalEntrySpend(entry)
+		if !ok {
+			return BTCUSDCPerformance{}, fmt.Errorf("performance refused: journal has invalid spend for order %s", entry.OrderID)
+		}
+		btcHeld.Add(btcHeld, btc)
+		costBasis.Add(costBasis, spend)
+		entries++
+	}
+	if entries == 0 || costBasis.Sign() == 0 {
+		return BTCUSDCPerformance{}, fmt.Errorf("performance unavailable: no filled BTC-USDC buys in journal")
+	}
+	currentValue := new(big.Rat).Mul(btcHeld, price)
+	pnl := new(big.Rat).Sub(currentValue, costBasis)
+	returnPercent := new(big.Rat).Mul(new(big.Rat).Quo(pnl, costBasis), big.NewRat(100, 1))
+	return BTCUSDCPerformance{
+		JournalEntries:      entries,
+		BTCHeld:             btcHeld.FloatString(16),
+		CostBasisUSDC:       costBasis.FloatString(8),
+		CurrentPriceUSDC:    price.FloatString(2),
+		CurrentValueUSDC:    currentValue.FloatString(8),
+		UnrealizedPnLUSDC:   pnl.FloatString(8),
+		UnrealizedReturnPct: returnPercent.FloatString(4),
+	}, nil
+}
+
 // SimulateOneUSDCBTCBuy calculates a paper buy from Coinbase public-product
 // JSON. Fees are deliberately not guessed; use an authenticated preview for a
 // fee quote before any real order.

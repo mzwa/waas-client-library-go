@@ -156,6 +156,18 @@ sudo touch /var/lib/coinbase-trading/DISABLED
 sudo rm /var/lib/coinbase-trading/DISABLED
 ```
 
+## Read-only performance report
+
+The performance report marks verified, filled `BTC-USDC` journal entries to the
+current public BTC-USDC price. It is an unrealized estimate—not a quote or a
+trade recommendation—and it makes no authenticated Coinbase request.
+
+```bash
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=performance \
+  -journal-path=/var/lib/coinbase-trading/trades.jsonl
+```
+
 ## Next stages
 
 1. Add paper-trading strategies and a daily budget policy before widening the
