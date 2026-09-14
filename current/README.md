@@ -105,10 +105,35 @@ go run ./current/cmd/advanced-trade-smoke -source=env -resource=live-order \
   -confirm-live-order=SUBMIT-1-USDC-BTC-USDC-BUY
 ```
 
+## Reconcile and journal a completed order
+
+`order-status` is a read-only Coinbase lookup. `journal-order-status` first
+performs that same read-only lookup, then appends selected trade metadata to a
+local JSONL journal with 0600 permissions. Each journal entry includes the
+previous entry hash, so `verify-journal` detects alteration or removal. It is
+tamper-evident rather than physically immutable; keep its directory restricted
+to the trading service account.
+
+```bash
+# Read Coinbase's final order record. This makes no account changes.
+go run ./current/cmd/advanced-trade-smoke -source=env \
+  -resource=order-status -order-id=<order-id>
+
+# Record only selected final order metadata in a local hash-chained journal.
+go run ./current/cmd/advanced-trade-smoke -source=env \
+  -resource=journal-order-status -order-id=<order-id> \
+  -journal-path=/var/lib/coinbase-trading/trades.jsonl
+
+# Verify every journal-chain link later.
+go run ./current/cmd/advanced-trade-smoke \
+  -resource=verify-journal \
+  -journal-path=/var/lib/coinbase-trading/trades.jsonl
+```
+
 ## Next stages
 
-1. Review and add a live order service using the `trade` key, guarded by
-   `RequireLiveOrderApproval` immediately before submission.
+1. Add paper-trading strategies and a daily budget policy before widening the
+   deliberately narrow 1-USDC live-order path.
 2. Add CDP Server Wallet support using the separate `wallet_secret`.
 3. Add the Embedded Wallet OAuth/custom-auth service without exposing backend
    secrets to clients.

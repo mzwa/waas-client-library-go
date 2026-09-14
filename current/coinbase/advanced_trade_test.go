@@ -60,6 +60,21 @@ func TestListAdvancedTradeAccountsUsesAuthenticatedReadOnlyRequest(t *testing.T)
 	}
 }
 
+func TestGetAdvancedTradeOrderUsesReadOnlyOrderEndpoint(t *testing.T) {
+	credentials := testCredentials(t)
+	orderID := "e2ac36ac-25c4-465b-9783-bdef0db2cac1"
+	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.String() != "https://api.coinbase.com"+historicalOrderPath+orderID {
+			t.Fatalf("unexpected request: %s %s", request.Method, request.URL)
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"order":{"order_id":"e2ac36ac-25c4-465b-9783-bdef0db2cac1"}}`)), Header: make(http.Header)}, nil
+	})}
+	response, err := GetAdvancedTradeOrder(context.Background(), client, credentials, orderID)
+	if err != nil || !strings.Contains(string(response), orderID) {
+		t.Fatalf("GetAdvancedTradeOrder() = %s, %v", response, err)
+	}
+}
+
 func TestListPublicProductsDoesNotSendAuthorization(t *testing.T) {
 	client := &http.Client{Transport: roundTripperFunc(func(request *http.Request) (*http.Response, error) {
 		if request.Method != http.MethodGet || request.URL.String() != "https://api.coinbase.com"+publicProductsPath {

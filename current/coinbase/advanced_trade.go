@@ -19,6 +19,7 @@ const accountsPath = "/api/v3/brokerage/accounts"
 const publicProductsPath = "/api/v3/brokerage/market/products"
 const previewOrderPath = "/api/v3/brokerage/orders/preview"
 const createOrderPath = "/api/v3/brokerage/orders"
+const historicalOrderPath = "/api/v3/brokerage/orders/historical/"
 
 const (
 	liveOrderProductID            = "BTC-USDC"
@@ -177,6 +178,16 @@ func CheckAdvancedTradePermissions(ctx context.Context, client *http.Client, cre
 // view-scoped Advanced Trade key. It does not place orders or move funds.
 func ListAdvancedTradeAccounts(ctx context.Context, client *http.Client, credentials Credentials) ([]byte, error) {
 	return getAdvancedTrade(ctx, client, credentials, accountsPath)
+}
+
+// GetAdvancedTradeOrder retrieves Coinbase's final record for one order. It is
+// read-only and never modifies an order, portfolio, or balance.
+func GetAdvancedTradeOrder(ctx context.Context, client *http.Client, credentials Credentials, orderID string) ([]byte, error) {
+	orderID = strings.TrimSpace(orderID)
+	if !isUUID(orderID) {
+		return nil, fmt.Errorf("a UUID Coinbase order ID is required")
+	}
+	return getAdvancedTrade(ctx, client, credentials, historicalOrderPath+url.PathEscape(orderID))
 }
 
 // ListPublicProducts retrieves public Advanced Trade product metadata. It does
